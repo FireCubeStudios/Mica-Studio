@@ -8,7 +8,7 @@
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" 
     xmlns:explorer="using:MicaStudio.Core.Interfaces.Explorer" 
     xmlns:selectors="using:MicaStudio.Selectors" 
-    xmlns:winui="using:FluentIcons.WinUI"
+    xmlns:winui="using:FluentIcons.WinUI" xmlns:explorer1="using:MicaStudio.Controls.Explorer"
     mc:Ignorable="d">
     <UserControl.Resources>
         <!--  The resource dictionary contains the item templates and selector resource for the TreeView  -->
@@ -44,10 +44,11 @@
             <TextBlock Text="Explorer" FontWeight="SemiBold" Opacity="0.8" VerticalAlignment="Center"/>
         </Grid>
         <MenuFlyoutSeparator Grid.Row="1"/>
-        <TreeView x:Name="ExplorerTreeView" Grid.Row="2" 
+        <TreeView x:Name="ExplorerTreeView" Grid.Row="2"  x:Load="False"
                   ItemsSource="{x:Bind files, Mode=OneWay}" 
                   ItemTemplateSelector="{StaticResource ExplorerItemSelector}"
                   SelectionChanged="ExplorerTreeView_SelectionChanged" 
                   Expanding="ExplorerTreeView_Expanding"/>
+        <explorer1:ExplorerListView Grid.Row="2" Folder="{x:Bind RootFolderNode, Mode=OneWay}"/>
     </Grid>
 </UserControl>

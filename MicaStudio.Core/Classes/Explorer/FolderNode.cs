@@ -31,7 +31,7 @@ namespace MicaStudio.Core.Classes.Explorer
 
 		public void Expanding()
 		{
-			if (Children.Count > 0) return; //temporary do not load if there are items already
+			if (Children.Count > 0) return; //TEMPORARY do not load if there are items already
 			try
 			{
 				// Get subfolders in this folder

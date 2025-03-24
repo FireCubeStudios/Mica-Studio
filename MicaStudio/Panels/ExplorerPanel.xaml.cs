@@ -1,4 +1,6 @@
+using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Messaging;
+using MicaStudio.Classes;
 using MicaStudio.Core.Classes.Explorer;
 using MicaStudio.Core.Interfaces.Explorer;
 using MicaStudio.Core.Messages.Commands.Files;
@@ -32,9 +34,12 @@ namespace MicaStudio.Panels
 {
 	public record TreeNode(string Name, string Path, bool isFolder, ObservableCollection<TreeNode> Children);
 
+	[INotifyPropertyChanged]
 	public sealed partial class ExplorerPanel : UserControl
 	{
 		private ObservableCollection<IExplorerNode> files = new();
+		[ObservableProperty]
+		private FolderTEMPNode rootFolderNode;
 		public ExplorerPanel()
 		{
 			this.InitializeComponent();
@@ -43,9 +48,11 @@ namespace MicaStudio.Panels
 			WeakReferenceMessenger.Default.Register<FolderOpenedMessage>(this, (r, m) =>
 			{
 				files.Clear();
-				var rootFolderNode = new FolderNode(m.Value.Item2);
-				files.Add(rootFolderNode);
-				rootFolderNode.IsExpanded = true;
+				//var rootFolderNode = new FolderNode(m.Value.Item2);
+				RootFolderNode = new FolderTEMPNode(m.Value.Item2);
+				files.Add(RootFolderNode);
+				RootFolderNode.IsExpanded = true;
+				RootFolderNode.Expanding();
 			});
 		}
 
