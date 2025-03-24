@@ -1,5 +1,6 @@
 ﻿using MicaStudio.Utilities;
 using Microsoft.UI.Dispatching;
+using Microsoft.UI.Xaml.Shapes;
 using System;
 using System.Collections;
 using System.Collections.Concurrent;
@@ -19,10 +20,8 @@ namespace MicaStudio.Highlighters
 {
 	// Highlights Scintilla Editor with random access algorithm
 	// Highlights file from top to bottom line by line on file load
-	public class RandomAccessHighlighter
+	public partial class RandomAccessHighlighter
 	{
-		// Maps a textmate colour to a scintilla style key
-		private Dictionary<int, int> colorToScintillaStyle = new();
 		private IGrammar grammar;
 		private Registry registry;
 		private Editor Editor;
@@ -51,7 +50,11 @@ namespace MicaStudio.Highlighters
 						//Editor.UpdateUI += Editor_UpdateUI;
 						//Editor.ZoomChanged += Editor_ZoomChanged;
 						Editor.SetILexer(0); // Needed to enable STYLENEEDED notifications
-						Editor.StyleNeeded += Editor_StyleNeeded;
+						Editor.Modified += Editor_Modified;
+
+						// WE DISABLED RANDOM HIGHLIGHTING FOR BACTH HIGHLIGHT TESTING
+						//Editor.StyleNeeded += Editor_StyleNeeded;
+						await HighlightRange(Editor.FirstVisibleLine, Editor.LineCount);
 					}
 
 					stopwatch.Stop();
@@ -59,6 +62,68 @@ namespace MicaStudio.Highlighters
 				});
 			}
 			catch { }
+		}
+
+		private Queue<long> frontier = new Queue<long>();
+		private async void Editor_Modified(Editor sender, ModifiedEventArgs args)
+		{
+			// args.linesAdded = Number of added lines. If negative, the number of deleted lines. Set to 0 if not used or no lines added or deleted.
+			// 0x01 == inserted text
+			// 0x02 == deleted text
+			if ((args.ModificationType & 0x01) != 0)
+			{
+				if(args.LinesAdded > 0) // multiple lines edited
+				{
+
+				}
+				else // single line edit
+				{
+
+					// Add the edited line to the frontier
+					frontier.Enqueue(Editor.LineFromPosition(args.Position));
+					Revalidate();
+				}
+			}
+
+			if ((args.ModificationType & 0x02) != 0)
+			{
+				if (args.LinesAdded < 0) // multiple lines deleted
+				{
+
+				}
+				else // single line edit
+				{
+					// Add the edited line to the frontier
+					frontier.Enqueue(Editor.LineFromPosition(args.Position));
+					Revalidate();
+				}
+			}
+		}
+
+		// A function which revalidates by clearing the frontier
+		// Loops through 
+		public void Revalidate()
+		{
+			while (frontier.Count > 0)
+			{
+				// Generate new state for next line
+				// If the cached state for next line is not the same as the new state then
+				// add the next line to frontier and also add new state to cache of nextline
+				long currentLine = frontier.Dequeue();
+				if (currentLine >= Editor.LineCount) return; // end of document reached
+				var currentState = cache[currentLine];
+
+				ITokenizeLineResult result = grammar.TokenizeLine(Editor.GetLine(currentLine), cache[currentLine - 1], TimeSpan.MaxValue);
+				var newState = result.RuleStack;
+				cache[currentLine] = newState; // save new state to cache
+
+				if (cache[currentLine + 1] != newState)
+				{
+					frontier.Enqueue(currentLine + 1); // add to frontier since state different
+				}
+				if (result.Tokens.Count() == 0) continue;
+				parseTokens(result, Editor.GetLine(currentLine), currentLine);
+			}
 		}
 
 		private CancellationTokenSource? cancel; // to cancel previous highlightrange
@@ -144,58 +209,7 @@ namespace MicaStudio.Highlighters
 			return ruleStack;
 		}
 
-
-		// Colour an individual line with tokens
-		private int keyCount = 190;
-		private void parseTokens(ITokenizeLineResult result, string line, long linePosition)
-		{
-			Theme theme = registry.GetTheme();
-
-			foreach (IToken token in result.Tokens)
-			{
-				int startIndex = (token.StartIndex > line.Length) ? line.Length : token.StartIndex;
-				int endIndex = (token.EndIndex > line.Length) ? line.Length : token.EndIndex;
-				foreach (var scope in token.Scopes)
-				{
-					List<ThemeTrieElementRule> themeRules = theme.Match(new string[] { scope });
-
-					foreach (ThemeTrieElementRule themeRule in themeRules)
-					{
-						DispatcherQueue.TryEnqueue(() =>
-						{
-							// get position of current line i
-							long linePos = Editor.PositionFromLine(linePosition);
-
-							// Register foreground colour to a scintilla style if it does not exist
-							if (!colorToScintillaStyle.ContainsKey(themeRule.foreground))
-							{
-								var color = ColourUtilities.HexToByte(theme.GetColor(themeRule.foreground));
-								keyCount++;
-								// IMPORTANT: Define a style with a unique KEY mapped to a colour, we will use it to highlight tokens
-								Editor.StyleSetFore(keyCount, color);
-
-								// add it to hashmap so we can retrieve it
-								colorToScintillaStyle[themeRule.foreground] = keyCount;
-							}
-
-							// start styling from token position by using line position and index of token
-							Editor.StartStyling(linePos + startIndex, 0);
-							// USE the style which we defined earlier for foreground on the token
-							// the scintilla style KEYS are in the hashmap
-							Editor.SetStyling(endIndex - startIndex, colorToScintillaStyle[themeRule.foreground]);
-							/*Debug.WriteLine(
-								"      - Matched theme rule: " +
-								"[bg: {0}, fg:{1}, fontStyle: {2}]",
-								theme.GetColor(themeRule.background),
-								theme.GetColor(themeRule.foreground),
-								themeRule.fontStyle);*/
-						});
-
-					}
-				}
-			}
-		}
-
+/*
 		// broken methods for highlighting
 		private async void Editor_ZoomChanged(Editor sender, ZoomChangedEventArgs args)
 		{
@@ -216,6 +230,6 @@ namespace MicaStudio.Highlighters
 
 				await HighlightRange(Editor.FirstVisibleLine, Editor.LinesOnScreen, cancel.Token);
 			}
-		}
+		}*/
 	}
 }
