@@ -70,6 +70,12 @@ namespace MicaStudio.Highlighters
 			// args.linesAdded = Number of added lines. If negative, the number of deleted lines. Set to 0 if not used or no lines added or deleted.
 			// 0x01 == inserted text
 			// 0x02 == deleted text
+
+			// If a single line is edited then we add it to the frontier
+			// (preferably actually add the line befor eit however our frontier method already takes the "state" of the previous line)
+			// If a region of text is replaced then we delete the cached states and add to frontier the previous line
+			// e.g if lines 5 - 10 are replaced we delete cache entries for 5 - 10 then we add 4 to frontier
+			// TODO: Handle inserting or deleting lines
 			if ((args.ModificationType & 0x01) != 0)
 			{
 				if(args.LinesAdded > 0) // multiple lines edited
@@ -102,28 +108,33 @@ namespace MicaStudio.Highlighters
 
 		// A function which revalidates by clearing the frontier
 		// Loops through 
-		public void Revalidate()
+		public async void Revalidate()
 		{
-			while (frontier.Count > 0)
+			await Task.Run(() =>
 			{
-				// Generate new state for next line
-				// If the cached state for next line is not the same as the new state then
-				// add the next line to frontier and also add new state to cache of nextline
-				long currentLine = frontier.Dequeue();
-				if (currentLine >= Editor.LineCount) return; // end of document reached
-				var currentState = cache[currentLine];
-
-				ITokenizeLineResult result = grammar.TokenizeLine(Editor.GetLine(currentLine), cache[currentLine - 1], TimeSpan.MaxValue);
-				var newState = result.RuleStack;
-				cache[currentLine] = newState; // save new state to cache
-
-				if (cache[currentLine + 1] != newState)
+				while (frontier.Count > 0)
 				{
-					frontier.Enqueue(currentLine + 1); // add to frontier since state different
+
+					long currentLine = frontier.Dequeue();
+					if (currentLine >= Editor.LineCount) return; // end of document reached
+
+					var currentState = cache[currentLine]; // get current state of line
+
+					// calculate new state of line using state of previous line which is guaranteed valid
+					ITokenizeLineResult result = grammar.TokenizeLine(Editor.GetLine(currentLine), cache[currentLine - 1], TimeSpan.MaxValue);
+					var newState = result.RuleStack;
+					cache[currentLine] = newState; // save new state to cache
+
+					// check if the cached state of the next line is different from the new state of this line
+					// or if the cache state does not exist then also add to frontier
+					if(!cache.ContainsKey(currentLine + 1) || cache[currentLine + 1] != newState)
+						frontier.Enqueue(currentLine + 1); // add next line to frontier since state different
+
+					// Syntax highlight current line with new state
+					if (result.Tokens.Count() == 0) continue;
+					parseTokens(result, Editor.GetLine(currentLine), currentLine);
 				}
-				if (result.Tokens.Count() == 0) continue;
-				parseTokens(result, Editor.GetLine(currentLine), currentLine);
-			}
+			});
 		}
 
 		private CancellationTokenSource? cancel; // to cancel previous highlightrange
